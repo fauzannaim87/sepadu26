@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Data Guru Kedah</title>
+  <meta name="description" content="Dashboard Data Sepadu Guru JPN Kedah">
+
+  <!-- Android / Chrome -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#1F5E3B">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- iPhone / iPad -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Data Guru">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+
+  <style>
+    :root { --navy: #011C4B; --padi: #1F5E3B; --jerami: #D9A21B; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--padi); overflow: hidden; }
+    body {
+      font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+      padding-top: env(safe-area-inset-top);          /* ruang takuk (notch) iPhone */
+    }
+    #app {
+      display: block; width: 100%; border: 0; background: #EEF2EE;
+      height: calc(100vh - env(safe-area-inset-top));
+      height: calc(100dvh - env(safe-area-inset-top));
+    }
+
+    /* Skrin pembuka */
+    #pembuka {
+      position: fixed; inset: 0; z-index: 10; background: var(--navy); color: #fff;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+      transition: opacity .3s ease;
+    }
+    #pembuka.hilang { opacity: 0; pointer-events: none; }
+    #pembuka img { width: 132px; height: 132px; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    #pembuka p { margin: 0; font-size: 15px; color: rgba(255,255,255,.85); text-align: center; padding: 0 24px; }
+    .pusing {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,.25); border-top-color: var(--jerami);
+      animation: pusing 0.9s linear infinite;
+    }
+    @keyframes pusing { to { transform: rotate(360deg); } }
+    #pembuka a {
+      display: none; color: var(--navy); background: var(--jerami); text-decoration: none;
+      font-weight: 700; padding: 11px 20px; border-radius: 22px;
+    }
+    #pembuka.lambat a { display: inline-block; }
+
+    /* Panduan tambah ke skrin utama */
+    #panduan {
+      position: fixed; left: 12px; right: 12px; z-index: 20;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      background: #fff; color: #1B2420; border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
+      padding: 14px 16px; display: none; gap: 12px; align-items: flex-start;
+      max-width: 520px; margin: 0 auto;
+    }
+    #panduan.papar { display: flex; }
+    #panduan img { width: 48px; height: 48px; border-radius: 11px; flex: none; }
+    #panduan h2 { margin: 0 0 4px; font-size: 15px; }
+    #panduan p { margin: 0; font-size: 13.5px; line-height: 1.45; color: #3D4A43; }
+    #panduan .aksi { display: flex; gap: 8px; margin-top: 10px; }
+    #panduan button {
+      font: inherit; font-size: 13.5px; font-weight: 650; border-radius: 18px; padding: 7px 14px; cursor: pointer;
+      border: 1px solid #D5DDD6; background: #fff; color: #1B2420;
+    }
+    #panduan button.utama { background: var(--padi); border-color: var(--padi); color: #fff; }
+    .ikon-kongsi { display: inline-block; vertical-align: -3px; }
+    @media (prefers-reduced-motion: reduce) { .pusing { animation-duration: 3s; } }
+  </style>
+</head>
+<body>
+  <div id="pembuka" role="status" aria-live="polite">
+    <img src="icons/icon-192.png" alt="">
+    <div class="pusing" aria-hidden="true"></div>
+    <p id="pembukaTeks">Memuatkan Data Guru Kedah…</p>
+    <a id="pautanTerus" href="#" target="_top" rel="noopener">Buka dashboard</a>
+  </div>
+
+  <iframe id="app" title="Dashboard Data Sepadu Guru JPN Kedah" allow="clipboard-write" hidden></iframe>
+
+  <div id="panduan" role="dialog" aria-labelledby="panduanTajuk">
+    <img src="icons/icon-192.png" alt="">
+    <div>
+      <h2 id="panduanTajuk">Pasang di skrin utama</h2>
+      <p id="panduanTeks"></p>
+      <div class="aksi">
+        <button id="btnPasang" class="utama" type="button" hidden>Pasang aplikasi</button>
+        <button id="btnNanti" type="button">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================ KONFIGURASI ============================
+    // Tampal URL Web App (.exec) dashboard di sini.
+    var GAS_URL = 'https://script.google.com/a/macros/moe.gov.my/s/AKfycbxC7sSZN5xgUxFnr4syCGx9eIe8y0tevgnd_QuSR7CMDdOiUe2XFbLy1xeHgwindUa5Jw/exec';
+
+    // 'iframe' : dashboard dibuka di dalam app ini (rasa seperti app sebenar).
+    //            Perlukan deployment "Who has access: Anyone".
+    // 'terus'  : app terus beralih ke URL dashboard. Guna ini jika deployment
+    //            dihadkan kepada akaun moe-dl.edu.my (perlu log masuk Google).
+    var MOD = 'terus';   // URL domain moe.gov.my: log masuk Google diperlukan, jadi buka terus
+    // =====================================================================
+
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var pembuka = $('pembuka');
+      $('pautanTerus').href = GAS_URL;
+
+      if (GAS_URL.indexOf('GANTIKAN') >= 0) {
+        $('pembukaTeks').textContent = 'URL dashboard belum ditetapkan. Kemas kini GAS_URL dalam index.html.';
+        document.querySelector('.pusing').style.display = 'none';
+        return;
+      }
+
+      if (MOD === 'terus') {
+        $('pembukaTeks').textContent = 'Membuka dashboard…';
+        setTimeout(function () { location.replace(GAS_URL); }, 400);
+      } else {
+        var app = $('app');
+        var lambat = setTimeout(function () {
+          pembuka.classList.add('lambat');
+          $('pembukaTeks').textContent = 'Dashboard mengambil masa untuk dimuatkan. Tunggu sebentar atau buka terus.';
+        }, 15000);
+        app.addEventListener('load', function () {
+          clearTimeout(lambat);
+          app.hidden = false;
+          pembuka.classList.add('hilang');
+          setTimeout(function () { pembuka.style.display = 'none'; }, 350);
+        });
+        app.src = GAS_URL;
+      }
+
+      // ---------- Panduan tambah ke skrin utama ----------
+      var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      var ua = navigator.userAgent;
+      var iOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var android = /Android/.test(ua);
+      var ditutup = false;
+      try { ditutup = localStorage.getItem('dgk_panduan_tutup') === '1'; } catch (e) {}
+
+      var promptPasang = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        promptPasang = e;
+        $('btnPasang').hidden = false;
+        $('panduanTeks').textContent = 'Pasang Data Guru Kedah supaya boleh dibuka terus dari skrin utama telefon anda.';
+        if (!standalone && !ditutup) $('panduan').classList.add('papar');
+      });
+      $('btnPasang').addEventListener('click', function () {
+        if (!promptPasang) return;
+        promptPasang.prompt();
+        promptPasang.userChoice.then(function () { promptPasang = null; $('panduan').classList.remove('papar'); });
+      });
+      $('btnNanti').addEventListener('click', function () {
+        $('panduan').classList.remove('papar');
+        try { localStorage.setItem('dgk_panduan_tutup', '1'); } catch (e) {}
+      });
+
+      if (!standalone && !ditutup && (iOS || android)) {
+        var kongsi = '<svg class="ikon-kongsi" width="16" height="18" viewBox="0 0 16 20" aria-label="Kongsi"><path fill="none" stroke="#1F5E3B" stroke-width="1.8" d="M8 13V2M4 5.5 8 1.5l4 4M3 8.5H1.5v10h13v-10H13"/></svg>';
+        $('panduanTeks').innerHTML = iOS
+          ? 'Tekan ' + kongsi + ' <b>Kongsi</b> di bar bawah Safari, kemudian pilih <b>Tambah ke Skrin Utama</b> (Add to Home Screen).'
+          : 'Tekan menu <b>&#8942;</b> di penjuru atas pelayar, kemudian pilih <b>Pasang aplikasi</b> atau <b>Tambah ke skrin utama</b>.';
+        setTimeout(function () { $('panduan').classList.add('papar'); }, 2500);
+      }
+
+      // Service worker: membuka app dengan pantas (cangkerang disimpan di telefon)
+      if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      }
+    })();
+  </script>
+</body>
+</html>
